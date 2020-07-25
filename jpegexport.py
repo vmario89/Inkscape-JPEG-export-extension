@@ -27,7 +27,7 @@ import math
 import inkex
 import simpletransform
 
-inkex.localize()
+inkex.localization.localize
 
 class JPEGExport(inkex.Effect):
 
@@ -35,12 +35,12 @@ class JPEGExport(inkex.Effect):
         """Init the effect library and get options from gui."""
         inkex.Effect.__init__(self)
 
-        self.OptionParser.add_option("--path",    action="store", type="string",  dest="path",    default="",        help="")
-        self.OptionParser.add_option("--bgcol",   action="store", type="string",  dest="bgcol",   default="#ffffff", help="")
-        self.OptionParser.add_option("--quality", action="store", type="int",     dest="quality", default="90",      help="")
-        self.OptionParser.add_option("--density", action="store", type="int",     dest="density", default="90",      help="")
-        self.OptionParser.add_option("--page",    action="store", type="inkbool", dest="page",    default=False,     help="")
-        self.OptionParser.add_option("--fast",    action="store", type="inkbool", dest="fast",    default=True,      help="")
+        self.arg_parser.add_argument("--path",    action="store", type=str,           dest="path",    default="",        help="")
+        self.arg_parser.add_argument("--bgcol",   action="store", type=str,           dest="bgcol",   default="#ffffff", help="")
+        self.arg_parser.add_argument("--quality", action="store", type=int,           dest="quality", default="90",      help="")
+        self.arg_parser.add_argument("--density", action="store", type=int,           dest="density", default="90",      help="")
+        self.arg_parser.add_argument("--page",    action="store", type=inkex.Boolean, dest="page",    default=False,     help="")
+        self.arg_parser.add_argument("--fast",    action="store", type=inkex.Boolean, dest="fast",    default=True,      help="")
 
     def effect(self):
         """get selected item coords and call command line command to export as a png"""
@@ -61,7 +61,8 @@ class JPEGExport(inkex.Effect):
             exit()
 
         outfile=self.options.path
-        curfile = self.args[-1]
+        curfile = self.options.input_file
+        #inkex.utils.debug("curfile:" + curfile)
         
         # Test if color is valid
         _rgbhexstring = re.compile(r'#[a-fA-F0-9]{6}$')
@@ -72,7 +73,7 @@ class JPEGExport(inkex.Effect):
         bgcol = self.options.bgcol
 
         if self.options.page == False:
-            if len(self.selected) == 0:
+            if len(self.svg.selected) == 0:
                 inkex.errormsg(_('Please select something.'))
                 exit()
 
@@ -94,16 +95,18 @@ class JPEGExport(inkex.Effect):
         scale = self.getUnittouu('1px')
         props=['x', 'y', 'width', 'height']
 
-        for id in self.selected:
+        for id in self.svg.selected:
             if self.options.fast == True:  # uses simpletransform
-                nodelist.append(self.getElementById(id))
+                nodelist.append(self.svg.getElementById(id)) 
             else:  # uses command line
                 rawprops=[]
                 for prop in props:
-                    command=("inkscape", "--without-gui", "--query-id", id, "--query-"+prop, self.args[-1])
+                    command=("inkscape", "--without-gui", "--query-id", id, "--query-"+prop, self.options.input_file)
                     proc=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
                     proc.wait()
                     rawprops.append(math.ceil(self.getUnittouu(proc.stdout.read())))
+                    proc.stdout.close()
+                    proc.stderr.close()
                 nodeEndX = rawprops[0] + rawprops[2]
                 nodeStartY = toty - rawprops[1] - rawprops[3]
                 nodeEndY = toty - rawprops[1]
@@ -122,76 +125,75 @@ class JPEGExport(inkex.Effect):
         
 
         if self.options.fast == True:  # uses simpletransform
-            bbox = simpletransform.computeBBox(nodelist)
-            startx = math.ceil(bbox[0])
-            endx = math.ceil(bbox[1])
-            h = -bbox[2] + bbox[3]
-            starty = toty - math.ceil(bbox[2]) -h
-            endy = toty - math.ceil(bbox[2])
+            bbox = sum([node.bounding_box() for node in nodelist], None)
+            #inkex.utils.debug(bbox) - see transform.py
+            '''
+             width = property(lambda self: self.x.size)
+             height = property(lambda self: self.y.size)
+             top = property(lambda self: self.y.minimum)
+             left = property(lambda self: self.x.minimum)
+             bottom = property(lambda self: self.y.maximum)
+             right = property(lambda self: self.x.maximum)
+             center_x = property(lambda self: self.x.center)
+             center_y = property(lambda self: self.y.center)
+            '''
+            startx = math.ceil(bbox.left)
+            endx = math.ceil(bbox.right)
+            h = -bbox.top + bbox.bottom
+            starty = toty - math.ceil(bbox.top) -h
+            endy = toty - math.ceil(bbox.top)
 
         coords = [startx / scale, starty / scale, endx / scale, endy / scale]
         return coords
 
     def exportArea(self, x0, y0, x1, y1, curfile, outfile, bgcol):
         tmp = self.getTmpPath()
-        command="inkscape -a %s:%s:%s:%s -d %s -e \"%sjpinkexp.png\" -b \"%s\" %s" % (x0, y0, x1, y1, self.options.density, tmp, bgcol, curfile)
-
-        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        command="inkscape --export-area %s:%s:%s:%s -d %s --export-filename \"%sjpinkexp.png\" -b \"%s\" \"%s\"" % (x0, y0, x1, y1, self.options.density, tmp, bgcol, curfile)
+        p = subprocess.Popen(command, shell=True)
         return_code = p.wait()
-        f = p.stdout
-        err = p.stderr
-
         self.tojpeg(outfile)
+        #inkex.utils.debug("command:" + command)
+        #inkex.utils.debug("Errorcode:" + str(return_code))
 
     def exportPage(self, curfile, outfile, bgcol):
         tmp = self.getTmpPath()
-        command = "inkscape -C -d %s -e \"%sjpinkexp.png\" -b\"%s\" %s" % (self.options.density, tmp,bgcol, curfile)
-
-        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        command = "inkscape --export-area-drawing -d %s --export-filename \"%sjpinkexp.png\" -b \"%s\" \"%s\"" % (self.options.density, tmp, bgcol, curfile)
+        p = subprocess.Popen(command, shell=True)
         return_code = p.wait()
-        f = p.stdout
-        err = p.stderr
-
         self.tojpeg(outfile)
-
-
+        #inkex.utils.debug("command:" + command)
+        #inkex.utils.debug("Errorcode:" + str(return_code))
+		
     def tojpeg(self,outfile):
         tmp = self.getTmpPath()
         if os.name == 'nt':
-	        outfile = outfile.encode('string-escape')
-
+	        outfile = outfile.replace("\\","\\\\")
         # set the ImageMagick command to run based on what's installed
         if find_executable('magick'):
-            command = "magick -sampling-factor 4:4:4 -strip -interlace JPEG -colorspace RGB -quality %s -density %s \"%sjpinkexp.png\" \"%s\" " % (self.options.quality, self.options.density, tmp, outfile)
+            command = "magick \"%sjpinkexp.png\" -sampling-factor 4:4:4 -strip -interlace JPEG -colorspace RGB -quality %s -density %s \"%s\" " % (tmp, self.options.quality, self.options.density, outfile)
+            # inkex.debug(command)
         elif find_executable('convert'):
-            command = "convert \"%sjpinkexp.png\" -sampling-factor 4:4:4 -strip -interlace JPEG -colorspace RGB -quality %s -density %s \"%s\" " % (tmp, self.options.quality, self.options.density, outfile)
+            command = "convert \"%sjpinkexp.png\" -sampling-factor 4:4:4 -strip -interlace JPEG -colorspace RGB -quality %s -density %s \%s\" " % (tmp, self.options.quality, self.options.density, outfile)
+            # inkex.debug(command)
         else:
             inkex.errormsg(_('ImageMagick does not appear to be installed.'))
-            exit()
-            
-        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            exit()   
+        p = subprocess.Popen(command, shell=True)
         return_code = p.wait()
-        f = p.stdout
-        err = p.stderr
+        #inkex.utils.debug("command:" + command)
+        #inkex.utils.debug("Errorcode:" + str(return_code))
 
     def getTmpPath(self):
         """Define the temporary folder path depending on the operating system"""
         if os.name == 'nt':
-            return 'C:\\WINDOWS\\Temp\\'
+            return os.getenv('TEMP') + '\\'
         else:
             return '/tmp/'
 
     def getUnittouu(self, param):
-        try:
-            return inkex.unittouu(param)
-
-        except AttributeError:
-            return self.unittouu(param)
-
-def _main():
-    e = JPEGExport()
-    e.affect()
-    exit()
+        return self.svg.unittouu(param)
 
 if __name__=="__main__":
-    _main()
+    e = JPEGExport()
+    e.run()
+    exit()
