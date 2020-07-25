@@ -1,12 +1,13 @@
-<inkscape-extension>
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
     <_name>JPEG Export</_name>
-    <id>id.giac.export.jpg</id>
-    <dependency type="executable" location="extensions">jpegexport.py</dependency>
-    <param name="path" type="string" _gui-text="Export path" _gui-description="Full path to your file, e.g. 'C:\Users\User_Name\Documents\myimage.jpg'"></param>
+    <id>fablabchemnitz.de.jpegexport</id>
+    <dependency type="executable" location="extensions">fablabchemnitz_jpegexport.py</dependency>
+    <param name="path" type="path" _gui-text="Export path" _gui-description="Full path to your file, e.g. 'C:\Users\User_Name\Documents\myimage.jpg'" filetypes="jpg" mode="file_new">C:\Users\</param>
     <param name="bgcol" type="string" _gui-text="Background color (leave blank for white)" _gui-description="Background color hex code, e.g. '#abc123'"></param>
     <param name="quality" type="int" min="0" max="100" _gui-text="Quality %" _gui-description="JPG compression quality">100</param>
     <param name="density" type="int" min="30" max="2400" _gui-text="Resolution (ppi)" _gui-description="Recommended: 90 (screens) or 300 (print)">90</param>
-    <param name="page" type="boolean" _gui-text="Export whole page"  _gui-description="If checked, the whole page will be exported, else the selection.">false</param>
+    <param name="page" type="boolean" _gui-text="Export whole page" _gui-description="If checked, the whole page will be exported, else the selection.">true</param>
     <param name="fast" type="boolean" _gui-text="Fast export (suggested)" _gui-description="Will use an approximate bounding box. If unchecked, export will take longer.">true</param>
     <_param name="usage" type="description" appearance="header">Usage</_param>
     <param name="help" type="description" xml:space="preserve">Select the objects in the drawing that you wish to export, or make a check at "Export whole page".
@@ -19,10 +20,12 @@ This extension requires that imagemagick is installed, more info and download at
     <effect needs-live-preview="false">
         <object-type>all</object-type>
         <effects-menu>
-            <submenu _name="Export" />
+            <submenu _name="FabLab Chemnitz">
+				<submenu _name="Import/Export/Transfer"/>
+			</submenu>
         </effects-menu>
     </effect>
     <script>
-        <command reldir="extensions" interpreter="python">jpegexport.py</command>
+        <command reldir="extensions" interpreter="python">fablabchemnitz_jpegexport.py</command>
     </script>
 </inkscape-extension>
